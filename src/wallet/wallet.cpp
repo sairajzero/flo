@@ -1,3 +1,21 @@
+
+Skip to content
+
+    All gists
+    GitHub
+
+    New gist
+
+Please verify your email address to access all of GitHub’s features.
+An email containing verification instructions was sent to sairaj.leo@gmail.com.
+
+    0
+
+@saizsassin saizsassin/wallet.cpp
+Created 40 minutes ago
+Code
+Revisions 1
+wallet.cpp
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (c) Flo Developers 2013-2018
@@ -5,7 +23,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "wallet/wallet.h"
-
+#include <algorithm>
 #include "base58.h"
 #include "checkpoints.h"
 #include "chain.h"
@@ -2473,7 +2491,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
     }
 
     // calculate value from preset inputs and store them
-    std::set<CInputCoin> setPresetCoins;
+    std::vector<CInputCoin> setPresetCoins;
     CAmount nValueFromPresetInputs = 0;
 
     std::vector<COutPoint> vPresetInputs;
@@ -2489,7 +2507,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             if (pcoin->tx->vout.size() <= outpoint.n)
                 return false;
             nValueFromPresetInputs += pcoin->tx->vout[outpoint.n].nValue;
-            setPresetCoins.insert(CInputCoin(pcoin, outpoint.n));
+            setPresetCoins.push_back(CInputCoin(pcoin, outpoint.n));
         } else
             return false; // TODO: Allow non-wallet inputs
     }
@@ -2497,32 +2515,43 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
     // remove preset inputs from vCoins
     for (std::vector<COutput>::iterator it = vCoins.begin(); it != vCoins.end() && coinControl && coinControl->HasSelected();)
     {
-        if (setPresetCoins.count(CInputCoin(it->tx, it->i)))
+        if (std::find(setPresetCoins.begin(), setPresetCoins.end(), CInputCoin(it->tx, it->i)) != setPresetCoins.end())
             it = vCoins.erase(it);
         else
             ++it;
     }
 
-    size_t nMaxChainLength = std::min(gArgs.GetArg("-limitancestorcount", DEFAULT_ANCESTOR_LIMIT), gArgs.GetArg("-limitdescendantcount", DEFAULT_DESCENDANT_LIMIT));
-    bool fRejectLongChains = gArgs.GetBoolArg("-walletrejectlongchains", DEFAULT_WALLET_REJECT_LONG_CHAINS);
-
-    bool res = nTargetValue <= nValueFromPresetInputs ||
-        SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 1, 6, 0, vCoins, setCoinsRet, nValueRet) ||
-        SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 1, 1, 0, vCoins, setCoinsRet, nValueRet) ||
-        (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, 2, vCoins, setCoinsRet, nValueRet)) ||
-        (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, std::min((size_t)4, nMaxChainLength/3), vCoins, setCoinsRet, nValueRet)) ||
-        (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, nMaxChainLength/2, vCoins, setCoinsRet, nValueRet)) ||
-        (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, nMaxChainLength, vCoins, setCoinsRet, nValueRet)) ||
-        (bSpendZeroConfChange && !fRejectLongChains && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, std::numeric_limits<uint64_t>::max(), vCoins, setCoinsRet, nValueRet));
-
-    // because SelectCoinsMinConf clears the setCoinsRet, we now add the possible inputs to the coinset
+    setCoinsRet.clear();
     setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
+    nValueRet = nValueFromPresetInputs;
 
-    // add preset inputs to the total value selected
-    nValueRet += nValueFromPresetInputs;
+    if (nValueFromPresetInputs >= nTargetValue)
+        return true;
 
-    return res;
+    CAmount nRemainReqValue = nTargetValue - nValueFromPresetInputs;
+    for (const COutput &output : vCoins)
+    {
+        if (!output.fSpendable)
+            continue;
+
+        const CWalletTx *pcoin = output.tx;
+        int i = output.i;
+        CInputCoin coin = CInputCoin(pcoin, i);
+        setCoinsRet.insert(coin);
+        nRemainReqValue -= coin.txout.nValue;
+        nValueRet += coin.txout.nValue;
+
+        //return true if coins of required Value are selected
+        if (nRemainReqValue <= 0)
+            return true;
+
+    }
+
+    //return false since coins of required Value are not selected
+    return false;
 }
+
+
 
 bool CWallet::SignTransaction(CMutableTransaction &tx)
 {
@@ -4340,3 +4369,25 @@ bool CMerkleTx::AcceptToMemoryPool(const CAmount& nAbsurdFee, CValidationState& 
 {
     return ::AcceptToMemoryPool(mempool, state, tx, true, nullptr, nullptr, false, nAbsurdFee);
 }
+@saizsassin
+
+Attach files by dragging & dropping,
+
+, or pasting from the clipboard.
+Styling with Markdown is supported
+
+    © 2018 GitHub, Inc.
+    Terms
+    Privacy
+    Security
+    Status
+    Help
+
+    Contact GitHub
+    API
+    Training
+    Shop
+    Blog
+    About
+
+Press h to open a hovercard with more details.
