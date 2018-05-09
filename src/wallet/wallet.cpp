@@ -1,27 +1,10 @@
-
-Skip to content
-
-    All gists
-    GitHub
-
-    New gist
-
-Please verify your email address to access all of GitHub’s features.
-An email containing verification instructions was sent to sairaj.leo@gmail.com.
-
-    0
-
-@saizsassin saizsassin/wallet.cpp
-Created 40 minutes ago
-Code
-Revisions 1
-wallet.cpp
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
 // Copyright (c) Flo Developers 2013-2018
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <iostream>
 #include "wallet/wallet.h"
 #include <algorithm>
 #include "base58.h"
@@ -2475,8 +2458,19 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
 
 bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl) const
 {
-    std::vector<COutput> vCoins(vAvailableCoins);
+    	std::vector<COutput> vCoinsTmp(vAvailableCoins);
+	std::vector<COutput>::iterator it;
+	std::set<unsigned int> time;
+	for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
+		time.insert(it->tx->nTimeReceived);
 
+	std::vector<COutput> vCoins;
+	vCoins.clear();
+	for(std::set<unsigned int>::iterator its = time.begin();its!=time.end();its++)
+		for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
+			if(it->tx->nTimeReceived == *its)
+				vCoins.push_back(*it);
+	
     // coin control -> return all selected outputs (we want all selected to go into the transaction for sure)
     if (coinControl && coinControl->HasSelected() && !coinControl->fAllowOtherInputs)
     {
@@ -2493,6 +2487,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
     // calculate value from preset inputs and store them
     std::vector<CInputCoin> setPresetCoins;
     CAmount nValueFromPresetInputs = 0;
+	setPresetCoins.clear();
 
     std::vector<COutPoint> vPresetInputs;
     if (coinControl)
@@ -2511,6 +2506,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
         } else
             return false; // TODO: Allow non-wallet inputs
     }
+	
 
     // remove preset inputs from vCoins
     for (std::vector<COutput>::iterator it = vCoins.begin(); it != vCoins.end() && coinControl && coinControl->HasSelected();)
@@ -2520,7 +2516,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
         else
             ++it;
     }
-
+	
     setCoinsRet.clear();
     setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
     nValueRet = nValueFromPresetInputs;
@@ -4369,25 +4365,3 @@ bool CMerkleTx::AcceptToMemoryPool(const CAmount& nAbsurdFee, CValidationState& 
 {
     return ::AcceptToMemoryPool(mempool, state, tx, true, nullptr, nullptr, false, nAbsurdFee);
 }
-@saizsassin
-
-Attach files by dragging & dropping,
-
-, or pasting from the clipboard.
-Styling with Markdown is supported
-
-    © 2018 GitHub, Inc.
-    Terms
-    Privacy
-    Security
-    Status
-    Help
-
-    Contact GitHub
-    API
-    Training
-    Shop
-    Blog
-    About
-
-Press h to open a hovercard with more details.
