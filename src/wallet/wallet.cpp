@@ -2458,9 +2458,10 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
 
 bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl) const
 {
-	/*This selectCoins function selects the coins (UTXOs) in FIFO order i.e, the coins that is received first will be sent to spending first*/ 
+/*This selectCoins function selects the coins (UTXOs) in FIFO order i.e, the coins that is received first will be sent to spending first*/ 
 
 	//get the received time of each coin and store in set time (using set because the content will be automatically stored in ascending order of the data)
+    	
     	std::vector<COutput> vCoinsTmp(vAvailableCoins);
 	std::vector<COutput>::iterator it;
 	std::set<unsigned int> time;
@@ -2489,26 +2490,26 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
     }
 
     // calculate value from preset inputs and store them in PresetCoins set
-    	std::vector<CInputCoin> setPresetCoins;
-    	CAmount nValueFromPresetInputs = 0;
+    std::vector<CInputCoin> setPresetCoins;
+    CAmount nValueFromPresetInputs = 0;
 	setPresetCoins.clear();
 
-    	std::vector<COutPoint> vPresetInputs;
-    	if (coinControl)
-        	coinControl->ListSelected(vPresetInputs);
-    	for (const COutPoint& outpoint : vPresetInputs)
-    	{
-		std::map<uint256, CWalletTx>::const_iterator it = mapWallet.find(outpoint.hash);
-		if (it != mapWallet.end())
-		{
-		    const CWalletTx* pcoin = &it->second;
-		    // Clearly invalid input, fail
-		    if (pcoin->tx->vout.size() <= outpoint.n)
-		        return false;
-		    nValueFromPresetInputs += pcoin->tx->vout[outpoint.n].nValue;
-		    setPresetCoins.push_back(CInputCoin(pcoin, outpoint.n));
-		} else
-            	return false; // TODO: Allow non-wallet inputs
+    std::vector<COutPoint> vPresetInputs;
+    if (coinControl)
+        coinControl->ListSelected(vPresetInputs);
+    for (const COutPoint& outpoint : vPresetInputs)
+    {
+        std::map<uint256, CWalletTx>::const_iterator it = mapWallet.find(outpoint.hash);
+        if (it != mapWallet.end())
+        {
+            const CWalletTx* pcoin = &it->second;
+            // Clearly invalid input, fail
+            if (pcoin->tx->vout.size() <= outpoint.n)
+                return false;
+            nValueFromPresetInputs += pcoin->tx->vout[outpoint.n].nValue;
+            setPresetCoins.push_back(CInputCoin(pcoin, outpoint.n));
+        } else
+            return false; // TODO: Allow non-wallet inputs
     }
 	
 
@@ -2521,13 +2522,13 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             ++it;
     }
     
-    //insert all preset Inputs to the setCoinsRet (returning set of selected utxo)	
+    //insert all preset Inputs to the setCoinsRet (returning set of selected utxo)		
     setCoinsRet.clear();
     setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
     nValueRet = nValueFromPresetInputs;
 
     //return true if total preset input value is greater than required amount
-    if (nValueFromPresetInputs >= nTargetValue) 
+    if (nValueFromPresetInputs >= nTargetValue)
         return true;
 
     //select UTXOs from vCoins and insert into setCoinsRet (returning set of selected utxo) until required amount is obtained
@@ -4372,3 +4373,4 @@ bool CMerkleTx::AcceptToMemoryPool(const CAmount& nAbsurdFee, CValidationState& 
 {
     return ::AcceptToMemoryPool(mempool, state, tx, true, nullptr, nullptr, false, nAbsurdFee);
 }
+
