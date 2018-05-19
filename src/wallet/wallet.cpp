@@ -2467,8 +2467,9 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
 	std::set<unsigned int> time;
 	for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
 		time.insert(it->tx->nTimeReceived); //nTimeReceived is the received time of the UTXO
-
+	
 	//store UTXOs in vCoins in the ascending order of time
+	std::reverse(vCoinsTmp.begin(),vCoinsTmp.end());
 	std::vector<COutput> vCoins;
 	vCoins.clear();
 	for(std::set<unsigned int>::iterator its = time.begin();its!=time.end();its++)
