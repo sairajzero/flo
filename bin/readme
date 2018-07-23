@@ -1,9 +1,0 @@
-to execute the pre-compiled binary version of the FLO core wallet,
-run the following command in terminal
-$./flo-qt
-
-to run the testnet wallet
-$./flo-qt --testnet
-
-to execute the flo cli commands use
-$./flo-cli
