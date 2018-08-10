@@ -2744,10 +2744,11 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
             // TODO: pass in scriptChange instead of reservekey so
             // change transaction isn't always pay-to-bitcoin-address
             CScript scriptChange;
-
+            bool coinControlDestChange=false;
             // coin control: send change to custom address
             if (!boost::get<CNoDestination>(&coin_control.destChange)) {
                 scriptChange = GetScriptForDestination(coin_control.destChange);
+                coinControlDestChange=true;
             } else { // no coin control: send change to newly generated address
                 // Note: We use a new key here to keep it from being obvious which side is the change.
                 //  The drawback is that by not reusing a previous key, the change may be lost if a
@@ -2818,7 +2819,6 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     }
                     txNew.vout.push_back(txout);
                 }
-
                 // Choose coins to use
                 if (pick_new_inputs) {
                     nValueIn = 0;
@@ -2827,6 +2827,23 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     {
                         strFailReason = _("Insufficient funds");
                         return false;
+                    }
+                }
+                // Send Change Back to Same (sending) Address
+                if(!coinControlDestChange && gArgs.GetBoolArg("-SendChangeToBack", false)){
+                    CTxDestination destChange;
+                    CAmount maxVal=0;
+                    bool avail = false;
+                    for (const CInputCoin &coin : setCoins ){
+                        if(!avail || coin.txout.nValue > maxVal){
+                            avail = (ExtractDestination(coin.txout.scriptPubKey, destChange) || avail);
+                            maxVal = coin.txout.nValue;
+                        }
+                    }
+                    if(avail){
+                        scriptChange = GetScriptForDestination(destChange);
+                        CTxOut change_prototype_txout(0, scriptChange);
+                        size_t change_prototype_size = GetSerializeSize(change_prototype_txout, SER_DISK, 0);
                     }
                 }
 
