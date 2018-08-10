@@ -2458,24 +2458,25 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
 
 bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl) const
 {
-/*This selectCoins function selects the coins (UTXOs) in FIFO order i.e, the coins that is received first will be sent to spending first*/ 
 
-	//get the received time of each coin and store in set time (using set because the content will be automatically stored in ascending order of the data)
+    std::vector<COutput> vCoins(vAvailableCoins);
+    if(gArgs.GetBoolArg("-CoinControlFIFO", false)){    //FIFO Coin Control
+
+	//get the received time of each coin and store in set time (using set because the content will be automatically stored in ascending order of the data)	
+        std::vector<COutput> vCoinsTmp(vAvailableCoins);
+    	std::vector<COutput>::iterator it;
+    	std::set<unsigned int> time;
+    	for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
+    		time.insert(it->tx->nTimeReceived); //nTimeReceived is the received time of the UTXO
     	
-    	std::vector<COutput> vCoinsTmp(vAvailableCoins);
-	std::vector<COutput>::iterator it;
-	std::set<unsigned int> time;
-	for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
-		time.insert(it->tx->nTimeReceived); //nTimeReceived is the received time of the UTXO
-	
-	//store UTXOs in vCoins in the ascending order of time
-	std::reverse(vCoinsTmp.begin(),vCoinsTmp.end());
-	std::vector<COutput> vCoins;
-	vCoins.clear();
-	for(std::set<unsigned int>::iterator its = time.begin();its!=time.end();its++)
-		for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
-			if(it->tx->nTimeReceived == *its)
-				vCoins.push_back(*it);
+    	//store UTXOs in vCoins in the ascending order of time
+    	std::reverse(vCoinsTmp.begin(),vCoinsTmp.end());
+    	vCoins.clear();
+    	for(std::set<unsigned int>::iterator its = time.begin();its!=time.end();its++)
+    		for(it=vCoinsTmp.begin();it!=vCoinsTmp.end();it++)
+    			if(it->tx->nTimeReceived == *its)
+    				vCoins.push_back(*it);
+    }
 	
     // coin control -> return all selected outputs (we want all selected to go into the transaction for sure) [manual selection] has no effect in default FIFO selection
     if (coinControl && coinControl->HasSelected() && !coinControl->fAllowOtherInputs)
@@ -2491,7 +2492,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
     }
 
     // calculate value from preset inputs and store them in PresetCoins set
-    std::vector<CInputCoin> setPresetCoins;
+    std::set<CInputCoin> setPresetCoins;
     CAmount nValueFromPresetInputs = 0;
 	setPresetCoins.clear();
 
@@ -2508,52 +2509,74 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             if (pcoin->tx->vout.size() <= outpoint.n)
                 return false;
             nValueFromPresetInputs += pcoin->tx->vout[outpoint.n].nValue;
-            setPresetCoins.push_back(CInputCoin(pcoin, outpoint.n));
+            setPresetCoins.insert(CInputCoin(pcoin, outpoint.n));
         } else
             return false; // TODO: Allow non-wallet inputs
     }
 	
-
     // remove preset inputs from vCoins (utxo)
     for (std::vector<COutput>::iterator it = vCoins.begin(); it != vCoins.end() && coinControl && coinControl->HasSelected();)
     {
-        if (std::find(setPresetCoins.begin(), setPresetCoins.end(), CInputCoin(it->tx, it->i)) != setPresetCoins.end())
+        if (setPresetCoins.count(CInputCoin(it->tx, it->i)))
             it = vCoins.erase(it);
         else
             ++it;
     }
     
-    //insert all preset Inputs to the setCoinsRet (returning set of selected utxo)		
-    setCoinsRet.clear();
-    setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
-    nValueRet = nValueFromPresetInputs;
+    if(gArgs.GetBoolArg("-CoinControlFIFO", false)){    //FIFO Coin Control
 
-    //return true if total preset input value is greater than required amount
-    if (nValueFromPresetInputs >= nTargetValue)
-        return true;
-
-    //select UTXOs from vCoins and insert into setCoinsRet (returning set of selected utxo) until required amount is obtained
-    CAmount nRemainReqValue = nTargetValue - nValueFromPresetInputs;
-    for (const COutput &output : vCoins)
-    {
-        if (!output.fSpendable)
-            continue;
-
-        const CWalletTx *pcoin = output.tx;
-        int i = output.i;
-        CInputCoin coin = CInputCoin(pcoin, i);
-        setCoinsRet.insert(coin);
-        nRemainReqValue -= coin.txout.nValue;
-        nValueRet += coin.txout.nValue;
-
-        //return true if coins of required amount are selected
-        if (nRemainReqValue <= 0)
+        //insert all preset Inputs to the setCoinsRet (returning set of selected utxo)		
+        setCoinsRet.clear();
+        setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
+        nValueRet = nValueFromPresetInputs;
+        //return true if total preset input value is greater than required amount
+        if (nValueFromPresetInputs >= nTargetValue)
             return true;
 
-    }
+        //select UTXOs from vCoins and insert into setCoinsRet (returning set of selected utxo) until required amount is obtained
+        CAmount nRemainReqValue = nTargetValue - nValueFromPresetInputs;
+        for (const COutput &output : vCoins)
+        {
+            if (!output.fSpendable)
+                continue;
 
-    //return false since coins of required amount is not available
-    return false;
+            const CWalletTx *pcoin = output.tx;
+            int i = output.i;
+            CInputCoin coin = CInputCoin(pcoin, i);
+            setCoinsRet.insert(coin);
+            nRemainReqValue -= coin.txout.nValue;
+            nValueRet += coin.txout.nValue;
+
+            //return true if coins of required amount are selected
+            if (nRemainReqValue <= 0)
+                return true;
+
+        }
+
+        //return false since coins of required amount is not available
+        return false;
+    }else{      //Not FIFO Coin Control
+
+        size_t nMaxChainLength = std::min(gArgs.GetArg("-limitancestorcount", DEFAULT_ANCESTOR_LIMIT), gArgs.GetArg("-limitdescendantcount", DEFAULT_DESCENDANT_LIMIT));
+        bool fRejectLongChains = gArgs.GetBoolArg("-walletrejectlongchains", DEFAULT_WALLET_REJECT_LONG_CHAINS);
+
+        bool res = nTargetValue <= nValueFromPresetInputs ||
+            SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 1, 6, 0, vCoins, setCoinsRet, nValueRet) ||
+            SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 1, 1, 0, vCoins, setCoinsRet, nValueRet) ||
+            (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, 2, vCoins, setCoinsRet, nValueRet)) ||
+            (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, std::min((size_t)4, nMaxChainLength/3), vCoins, setCoinsRet, nValueRet)) ||
+            (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, nMaxChainLength/2, vCoins, setCoinsRet, nValueRet)) ||
+            (bSpendZeroConfChange && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, nMaxChainLength, vCoins, setCoinsRet, nValueRet)) ||
+            (bSpendZeroConfChange && !fRejectLongChains && SelectCoinsMinConf(nTargetValue - nValueFromPresetInputs, 0, 1, std::numeric_limits<uint64_t>::max(), vCoins, setCoinsRet, nValueRet));
+
+        // because SelectCoinsMinConf clears the setCoinsRet, we now add the possible inputs to the coinset
+        setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
+
+        // add preset inputs to the total value selected
+        nValueRet += nValueFromPresetInputs;
+
+        return res;
+    }
 }
 
 
