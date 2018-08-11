@@ -2488,14 +2488,6 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             nValueRet += out.tx->tx->vout[out.i].nValue;
             setCoinsRet.insert(CInputCoin(out.tx, out.i));
         }
-        // address for SendChangeToBack
-        CAmount maxVal=0;
-        for (const CInputCoin &coin : setCoinsRet){
-            if(coin.txout.nValue > maxVal){
-                ExtractDestination(coin.txout.scriptPubKey, destChange);
-                maxVal = coin.txout.nValue;
-            }
-        }
 
         bool res = (nValueRet >= nTargetValue);
         // address for SendChangeToBack
@@ -2573,9 +2565,7 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
                     ExtractDestination(coin.txout.scriptPubKey, destChange);
                 return true;
             }
-
         }
-
         //return false since coins of required amount is not available
         return false;
     }else{      //Not FIFO Coin Control
@@ -2607,7 +2597,6 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
                 }
             }
         }
-
         return res;
     }
 }
