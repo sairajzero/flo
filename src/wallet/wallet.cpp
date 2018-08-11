@@ -2456,7 +2456,7 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, const int nConfMin
     return true;
 }
 
-bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, const CCoinControl* coinControl) const
+bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAmount& nTargetValue, std::set<CInputCoin>& setCoinsRet, CAmount& nValueRet, CTxDestination& destChange, const CCoinControl* coinControl) const
 {
 
     std::vector<COutput> vCoins(vAvailableCoins);
@@ -2488,7 +2488,27 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             nValueRet += out.tx->tx->vout[out.i].nValue;
             setCoinsRet.insert(CInputCoin(out.tx, out.i));
         }
-        return (nValueRet >= nTargetValue);
+        // address for SendChangeToBack
+        CAmount maxVal=0;
+        for (const CInputCoin &coin : setCoinsRet){
+            if(coin.txout.nValue > maxVal){
+                ExtractDestination(coin.txout.scriptPubKey, destChange);
+                maxVal = coin.txout.nValue;
+            }
+        }
+
+        bool res = (nValueRet >= nTargetValue);
+        // address for SendChangeToBack
+        if(res && gArgs.GetBoolArg("-SendChangeToBack", false)){
+            CAmount maxVal=0;
+            for (const CInputCoin &coin : setCoinsRet){
+                if(coin.txout.nValue > maxVal){
+                    ExtractDestination(coin.txout.scriptPubKey, destChange);
+                    maxVal = coin.txout.nValue;
+                }
+            }
+        }
+        return res;
     }
 
     // calculate value from preset inputs and store them in PresetCoins set
@@ -2548,8 +2568,11 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
             nValueRet += coin.txout.nValue;
 
             //return true if coins of required amount are selected
-            if (nRemainReqValue <= 0)
+            if (nRemainReqValue <= 0){
+                if(gArgs.GetBoolArg("-SendChangeToBack", false))
+                    ExtractDestination(coin.txout.scriptPubKey, destChange);
                 return true;
+            }
 
         }
 
@@ -2571,9 +2594,19 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
 
         // because SelectCoinsMinConf clears the setCoinsRet, we now add the possible inputs to the coinset
         setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
-
         // add preset inputs to the total value selected
         nValueRet += nValueFromPresetInputs;
+
+        // address for SendChangeToBack
+        if(res && gArgs.GetBoolArg("-SendChangeToBack", false)){
+            CAmount maxVal=0;
+            for (const CInputCoin &coin : setCoinsRet){
+                if(coin.txout.nValue > maxVal){
+                    ExtractDestination(coin.txout.scriptPubKey, destChange);
+                    maxVal = coin.txout.nValue;
+                }
+            }
+        }
 
         return res;
     }
@@ -2819,11 +2852,13 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                     }
                     txNew.vout.push_back(txout);
                 }
+
+                CTxDestination destChange;                
                 // Choose coins to use
                 if (pick_new_inputs) {
                     nValueIn = 0;
                     setCoins.clear();
-                    if (!SelectCoins(vAvailableCoins, nValueToSelect, setCoins, nValueIn, &coin_control))
+                    if (!SelectCoins(vAvailableCoins, nValueToSelect, setCoins, nValueIn, destChange, &coin_control))
                     {
                         strFailReason = _("Insufficient funds");
                         return false;
@@ -2831,20 +2866,9 @@ bool CWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletT
                 }
                 // Send Change Back to Same (sending) Address
                 if(!coinControlDestChange && gArgs.GetBoolArg("-SendChangeToBack", false)){
-                    CTxDestination destChange;
-                    CAmount maxVal=0;
-                    bool avail = false;
-                    for (const CInputCoin &coin : setCoins ){
-                        if(!avail || coin.txout.nValue > maxVal){
-                            avail = (ExtractDestination(coin.txout.scriptPubKey, destChange) || avail);
-                            maxVal = coin.txout.nValue;
-                        }
-                    }
-                    if(avail){
-                        scriptChange = GetScriptForDestination(destChange);
-                        CTxOut change_prototype_txout(0, scriptChange);
-                        size_t change_prototype_size = GetSerializeSize(change_prototype_txout, SER_DISK, 0);
-                    }
+                    scriptChange = GetScriptForDestination(destChange);
+                    CTxOut change_prototype_txout(0, scriptChange);
+                    size_t change_prototype_size = GetSerializeSize(change_prototype_txout, SER_DISK, 0);
                 }
 
                 const CAmount nChange = nValueIn - nValueToSelect;
