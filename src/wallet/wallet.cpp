@@ -2542,8 +2542,18 @@ bool CWallet::SelectCoins(const std::vector<COutput>& vAvailableCoins, const CAm
         setCoinsRet.insert(setPresetCoins.begin(), setPresetCoins.end());
         nValueRet = nValueFromPresetInputs;
         //return true if total preset input value is greater than required amount
-        if (nValueFromPresetInputs >= nTargetValue)
+        if (nValueFromPresetInputs >= nTargetValue){
+            if(gArgs.GetBoolArg("-SendChangeToBack", false)){
+                CAmount maxVal=0;
+                for (const CInputCoin &coin : setCoinsRet){
+                    if(coin.txout.nValue > maxVal){
+                        ExtractDestination(coin.txout.scriptPubKey, destChange);
+                        maxVal = coin.txout.nValue;
+                    }
+                }
+            }
             return true;
+        }
 
         //select UTXOs from vCoins and insert into setCoinsRet (returning set of selected utxo) until required amount is obtained
         CAmount nRemainReqValue = nTargetValue - nValueFromPresetInputs;
