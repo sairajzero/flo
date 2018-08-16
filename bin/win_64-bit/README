@@ -1,6 +1,6 @@
-These are pre-compiled binaries of stable FLO Core Wallet for Windows 64-bit
+These are executable files of stable FLO Core Wallet for Windows 64-bit
 
-Run the following cmds in command prompt
+Run the following cmds in command prompt (open cmd-prompt in this directory)
 
 To run FLO core wallet QT :
 flo-qt

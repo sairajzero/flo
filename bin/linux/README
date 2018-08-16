@@ -22,7 +22,7 @@ $./flod -daemon
 Upgrade Details :
 Added 2 features to the FLO wallet :
 1. CoinControlFIFO - selects the coins that were received first to be spent first (First-In-First-Out).
-To enable it, add CoinControlFIFO=1 in flo.conf
+To enable it:add CoinControlFIFO=1 in flo.conf (or) pass -CoinControlFIFO as cmdline arg [ex: $./flo-qt -CoinControlFIFO]
 
 2. SendChangeToBack - send the change back to the coin's original address
-To enable it, add SendChangeToBack=1 in flo.conf
+To enable it, add SendChangeToBack=1 in flo.conf (or) pass -SendChangeToBack as cmdline arg [ex: $./flo-qt -SendChangeToBack]
